@@ -78,7 +78,11 @@
   "HARD check: proposals mentioning medication/clinical/restraint/etc. are blocked."
   [st adv]
   (println "\n--- Scenario: HARD Check - Scope Exclusion ---")
-  (let [bad-proposal (governor/out-of-scope-test-proposal st {:resident-id "resident-1"})
+  (let [bad-proposal {:op :log-resident-note :resident-id "resident-1"
+                       :summary "投薬管理の提案" :rationale "この提案は故意にスコープ外の内容を含む - デモのみ用"
+                       :cites ["resident-1"] :effect :propose
+                       :value {:resident-id "resident-1" :medication-change :increased}
+                       :confidence 0.95}
         check-result (governor/out-of-scope-test-check bad-proposal st)]
     (println (str "Proposal summary: " (:summary bad-proposal)))
     (println (str "Check ok?: " (:ok? check-result)))
