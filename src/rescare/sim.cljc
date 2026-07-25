@@ -119,8 +119,9 @@
     (assert (:ok? check-result) "Low confidence is soft check (ok=true, escalate=true)"))
   (print-sep))
 
-(defn run-demo []
+(defn run-demo
   "Execute all demo scenarios."
+  []
   (println "\n╔═══════════════════════════════════════════════════════════════════════╗")
   (println "║     rescare (ISIC-879) Residential Care Actor Demo                    ║")
   (println "╚═══════════════════════════════════════════════════════════════════════╝")
