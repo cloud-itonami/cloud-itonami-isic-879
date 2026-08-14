@@ -2479,6 +2479,7 @@ img,svg { max-width: 100%; height: auto; }</style></head><body>
         <tr><td>エスカレーション(人間へ)</td><td class="num">3</td></tr>
         <tr><td><strong>HARD hold</strong></td><td class="num"><span class="critical">5</span></td></tr>
         <tr><td>発火した HARD ルール</td><td><code>:effect-not-propose</code>, <code>:op-not-allowed</code>, <code>:resident-unverified</code>, <code>:scope-excluded</code></td></tr>
+        <tr><td>構造的に到達不能な操作</td><td class="num">1 / 5</td></tr>
       </tbody>
     </table>
     <p class="muted">HARD hold が 0 件の実行はビルドを失敗させる &mdash; <code>-main</code> は <code>hard-hold-facts</code> が空なら例外を投げるので、このページが幸福経路だけを見せる状態に静かに劣化することはない。</p>
@@ -2505,7 +2506,7 @@ img,svg { max-width: 100%; height: auto; }</style></head><body>
       <tbody>
         <tr><td>日常ノートの記録(清潔な提案)</td><td><code>log-resident-note</code></td><td>resident-1</td><td class="num">3</td><td>production</td><td><span class="ok">committed &middot; 自動</span></td><td>phase 3 で自動コミット</td></tr>
         <tr><td>家族・保護者の面会予定</td><td><code>schedule-family-or-guardian-visit</code></td><td>resident-2</td><td class="num">3</td><td>production</td><td><span class="ok">committed &middot; 自動</span></td><td>phase 3 で自動コミット</td></tr>
-        <tr><td>消耗品の調達調整</td><td><code>coordinate-supply-request</code></td><td>resident-1</td><td class="num">3</td><td>production</td><td><span class="critical">HARD hold &middot; scope-excluded</span></td><td>phase 3 で自動コミット</td></tr>
+        <tr><td>消耗品の調達調整</td><td><code>coordinate-supply-request</code></td><td>resident-1</td><td class="num">3</td><td>production</td><td><span class="critical">HARD hold &middot; scope-excluded</span></td><td>本来は phase 3 で自動コミットのはずだが、下記の欠陥により常に HARD hold</td></tr>
         <tr><td>ケア担当者のシフト提案</td><td><code>schedule-staff-shift-proposal</code></td><td>resident-2</td><td class="num">3</td><td>production</td><td><span class="ok">committed &middot; 自動</span></td><td>phase 3 で自動コミット</td></tr>
         <tr><td>安全懸念のフラグ(転落の目撃)</td><td><code>flag-safety-concern</code></td><td>resident-1</td><td class="num">3</td><td>production</td><td><span class="warn">escalated &middot; 人間の承認待ち</span></td><td>常に人間へエスカレーション(phase 3 でも自動化されない)</td></tr>
         <tr><td>面会予定を phase 1 で提案</td><td><code>schedule-family-or-guardian-visit</code></td><td>resident-2</td><td class="num">1</td><td>production</td><td><span class="warn">escalated &middot; 人間の承認待ち</span></td><td>phase gate によりエスカレーション</td></tr>
@@ -2540,6 +2541,23 @@ img,svg { max-width: 100%; height: auto; }</style></head><body>
         <tr><td><code>log-resident-note</code></td><td><span class="ok">phase 3: 清潔なら自動コミット</span></td></tr>
         <tr><td><code>schedule-family-or-guardian-visit</code></td><td><span class="ok">phase 3: 清潔なら自動コミット</span></td></tr>
         <tr><td><code>schedule-staff-shift-proposal</code></td><td><span class="ok">phase 3: 清潔なら自動コミット</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>操作ごとの構造的な到達可能性</h2>
+    <p class="muted">許可リスト上の各操作について、<strong>本番の助言ノードが登録済み・検証済みの入居者に対して空の patch で起案した場合</strong>(その操作が遭遇しうる最も有利な条件)にガバナーを通過できるかを、実際に起案・審査して測定したもの。ここで「到達不能」と出た操作は、誰がどう申請しても永久にコミットできない。</p>
+    <p><span class="critical">このビルドが検出した欠陥</span> &mdash; 1 件の操作が構造的に到達不能:</p>
+    <p class="muted"><code>rescare.governor/scope-excluded-terms</code> は自身の docstring で「(bare 'medic' ではなく 'medication dosing' のように)慎重に限定してあるので、この actor の正当な中核ユースケースと衝突することはない」と述べている。しかし実測ではその主張が成立していない &mdash; ブロックリストに限定されていない <code>薬</code> が含まれており、<code>rescare.advisor/propose-supply-request</code> が自ら書く定型文「非医<strong>薬</strong>品消耗品の調達調整のみ。投<strong>薬</strong>なし。」&mdash; つまり<em>投薬ではないと否定している文言そのもの</em> &mdash; に一致してしまい、許可された 5 操作のうち <code>coordinate-supply-request</code> が100% HARD hold になる。既存のテストはこれを捕捉していない(32 tests / 109 assertions は全て通る): <code>advisor_test</code> は助言ノードの出力形状のみ、<code>phase_test</code> は phase 表のみを検査しており、<strong>本番の助言ノードの出力をガバナーに通す経路を誰も検査していない</strong>。この欠陥はこのページを生成するために実パイプラインを端から端まで走らせた結果として現れた。</p>
+    <p class="muted">この表は決め打ちではなく毎回測り直すので、衝突が解消されれば警告は自動的に消える。修正は本 item の範囲外(ガバナーの意味論の変更は別の変更として扱う)。</p>
+    <table>
+      <thead><tr><th>操作</th><th>構造的な到達可能性</th><th>スコープ走査の一致</th></tr></thead>
+      <tbody>
+        <tr><td><code>coordinate-supply-request</code></td><td><span class="critical">到達不能 &middot; 常に HARD hold (scope-excluded)</span></td><td>ブロックリストに一致: <code>薬</code></td></tr>
+        <tr><td><code>flag-safety-concern</code></td><td><span class="warn">人間の承認を経れば到達可能</span></td><td><span class="muted">一致なし</span></td></tr>
+        <tr><td><code>log-resident-note</code></td><td><span class="ok">到達可能</span></td><td><span class="muted">一致なし</span></td></tr>
+        <tr><td><code>schedule-family-or-guardian-visit</code></td><td><span class="ok">到達可能</span></td><td><span class="muted">一致なし</span></td></tr>
+        <tr><td><code>schedule-staff-shift-proposal</code></td><td><span class="ok">到達可能</span></td><td><span class="muted">一致なし</span></td></tr>
       </tbody>
     </table>
   </section>

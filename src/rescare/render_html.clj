@@ -124,8 +124,13 @@
     :request {:op :schedule-family-or-guardian-visit :resident-id "resident-2"
               :patch {:visitor :appointed-guardian :date :2026-08-22}}}
 
+   ;; 期待は「自動コミット」だが、実測では HARD hold になる。ガバナーの
+   ;; ブロックリストの限定されていない「薬」が、助言ノード自身の定型文
+   ;; 「非医薬品消耗品の…投薬なし。」に一致するため。下の
+   ;; `op-reachability` が毎回測り直す。ページの表示を期待に合わせるために
+   ;; シナリオを外したりせず、実際に起きることをそのまま見せる。
    {:label   "消耗品の調達調整"
-    :expect  "phase 3 で自動コミット"
+    :expect  "本来は phase 3 で自動コミットのはずだが、下記の欠陥により常に HARD hold"
     :advisor :production
     :phase   3
     :request {:op :coordinate-supply-request :resident-id "resident-1"
@@ -290,6 +295,43 @@
      :escalated-count (count escalated)
      :audit-approver audit-approver}))
 
+;; ----------------------------- structural reachability -----------------------------
+
+(defn- scan-blob
+  "Mirror of `rescare.governor`'s private `text-blob` -- the same
+  flattening the scope scan runs over. Duplicated (not reused) only
+  because it is private there; if the governor's field selection
+  changes, this diagnostic must be updated to match."
+  [proposal]
+  (str/lower-case (pr-str (select-keys proposal [:op :summary :rationale :cites :value]))))
+
+(defn op-reachability
+  "MEASURES, for every op on the governor's allowlist, whether that op
+  can EVER clear the governor when drafted by the PRODUCTION advisor
+  against a fully registered+verified resident with an empty patch --
+  i.e. the most favourable case that op will ever see.
+
+  This is a derived diagnostic, not an assertion: it drafts with the
+  real `rescare.advisor` and judges with the real `rescare.governor`.
+  If an op comes back blocked here, no request of that kind can ever
+  commit, no matter who files it. It reports the offending blocklist
+  term so the finding is actionable, and it disappears by itself once
+  the collision is resolved -- nothing about the defect is hardcoded."
+  [db]
+  (let [rid (:resident-id (first (filter #(and (:registered? %) (:verified? %))
+                                         (store/all-residents db))))
+        adv (advisor/mock-advisor)]
+    (for [op (sort-by name governor/allowed-ops)]
+      (let [request {:op op :resident-id rid :patch {}}
+            proposal (advisor/advise adv db request)
+            check (governor/check request :production proposal db)
+            blob (scan-blob proposal)]
+        {:op op
+         :hard? (boolean (:hard? check))
+         :rules (mapv :rule (:violations check))
+         :terms (vec (filter #(str/includes? blob %) governor/scope-excluded-terms))
+         :always-escalates? (contains? governor/always-escalate-ops op)}))))
+
 ;; ----------------------------- rendering -----------------------------
 
 (defn- esc [v]
@@ -361,6 +403,59 @@
               (str "<code>" (str/join "</code>, <code>" (map esc auto)) "</code>")
               "<span class=\"muted\">なし(全件エスカレーション)</span>"))))
 
+(defn- reachability-row [{:keys [op hard? rules terms always-escalates?]}]
+  (format "        <tr><td><code>%s</code></td><td>%s</td><td>%s</td></tr>"
+          (esc (kw-name op))
+          (cond
+            hard? (str "<span class=\"critical\">到達不能 &middot; 常に HARD hold ("
+                       (esc (str/join ", " (map kw-name rules))) ")</span>")
+            always-escalates? "<span class=\"warn\">人間の承認を経れば到達可能</span>"
+            :else "<span class=\"ok\">到達可能</span>")
+          (if (seq terms)
+            (str "ブロックリストに一致: <code>" (str/join "</code>, <code>" (map esc terms)) "</code>")
+            "<span class=\"muted\">一致なし</span>")))
+
+(defn- reachability-section [report]
+  (let [blocked (filter :hard? report)]
+    (str
+     "  <section class=\"card\">\n"
+     "    <h2>操作ごとの構造的な到達可能性</h2>\n"
+     "    <p class=\"muted\">許可リスト上の各操作について、"
+     "<strong>本番の助言ノードが登録済み・検証済みの入居者に対して空の patch で起案した場合</strong>"
+     "(その操作が遭遇しうる最も有利な条件)にガバナーを通過できるかを、"
+     "実際に起案・審査して測定したもの。ここで「到達不能」と出た操作は、"
+     "誰がどう申請しても永久にコミットできない。</p>\n"
+     (when (seq blocked)
+       (str
+        "    <p><span class=\"critical\">このビルドが検出した欠陥</span> &mdash; "
+        (esc (count blocked)) " 件の操作が構造的に到達不能:</p>\n"
+        "    <p class=\"muted\">"
+        "<code>rescare.governor/scope-excluded-terms</code> は自身の docstring で"
+        "「(bare 'medic' ではなく 'medication dosing' のように)慎重に限定してあるので、"
+        "この actor の正当な中核ユースケースと衝突することはない」と述べている。"
+        "しかし実測ではその主張が成立していない &mdash; ブロックリストに限定されていない "
+        "<code>薬</code> が含まれており、"
+        "<code>rescare.advisor/propose-supply-request</code> が自ら書く定型文"
+        "「非医<strong>薬</strong>品消耗品の調達調整のみ。投<strong>薬</strong>なし。」"
+        "&mdash; つまり<em>投薬ではないと否定している文言そのもの</em> &mdash; に一致してしまい、"
+        "許可された 5 操作のうち <code>coordinate-supply-request</code> が"
+        "100% HARD hold になる。"
+        "既存のテストはこれを捕捉していない(32 tests / 109 assertions は全て通る): "
+        "<code>advisor_test</code> は助言ノードの出力形状のみ、"
+        "<code>phase_test</code> は phase 表のみを検査しており、"
+        "<strong>本番の助言ノードの出力をガバナーに通す経路を誰も検査していない</strong>。"
+        "この欠陥はこのページを生成するために実パイプラインを端から端まで走らせた結果として現れた。</p>\n"
+        "    <p class=\"muted\">この表は決め打ちではなく毎回測り直すので、"
+        "衝突が解消されれば警告は自動的に消える。修正は本 item の範囲外"
+        "(ガバナーの意味論の変更は別の変更として扱う)。</p>\n"))
+     "    <table>\n"
+     "      <thead><tr><th>操作</th><th>構造的な到達可能性</th><th>スコープ走査の一致</th></tr></thead>\n"
+     "      <tbody>\n"
+     (str/join "\n" (map reachability-row report)) "\n"
+     "      </tbody>\n"
+     "    </table>\n"
+     "  </section>\n")))
+
 (defn- gate-row [op]
   (let [always? (contains? governor/always-escalate-ops op)
         auto3? (phase/can-auto-commit? op 3)]
@@ -408,7 +503,8 @@
         holds (vec (hard-hold-facts db))
         committed (vec (store/coordination-log db))
         rules (hold-rules db)
-        disclosure (approval-disclosure db)]
+        disclosure (approval-disclosure db)
+        report (op-reachability db)]
     (str
      "<!doctype html>\n<html lang=\"ja\"><head><meta charset=\"utf-8\">"
      "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
@@ -440,6 +536,8 @@
              (count holds))
      (format "        <tr><td>発火した HARD ルール</td><td><code>%s</code></td></tr>\n"
              (str/join "</code>, <code>" (map esc rules)))
+     (format "        <tr><td>構造的に到達不能な操作</td><td class=\"num\">%s / %s</td></tr>\n"
+             (count (filter :hard? report)) (count report))
      "      </tbody>\n"
      "    </table>\n"
      "    <p class=\"muted\">HARD hold が 0 件の実行はビルドを失敗させる &mdash; "
@@ -505,6 +603,8 @@
      "      </tbody>\n"
      "    </table>\n"
      "  </section>\n"
+
+     (reachability-section (op-reachability db))
 
      "  <section class=\"card\">\n"
      "    <h2>段階的ロールアウト (phase table)</h2>\n"
@@ -581,4 +681,6 @@
                   (count holds) " HARD holds ["
                   (str/join ", " (map kw-name (hold-rules db))) "], "
                   (count (store/coordination-log db)) " committed records, approver-attribution="
-                  (name (:verdict (approval-disclosure db))) ")"))))
+                  (name (:verdict (approval-disclosure db)))
+                  ", structurally-unreachable-ops="
+                  (count (filter :hard? (op-reachability db))) ")"))))
