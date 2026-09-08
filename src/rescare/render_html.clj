@@ -37,7 +37,7 @@
 
   Usage: `clojure -M:dev:render-html [out-file]`
   (default `docs/samples/operator-console.html`)."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [jp-go-dds.skin]
             [rescare.advisor :as advisor]
             [rescare.governor :as governor]
@@ -303,7 +303,7 @@
   because it is private there; if the governor's field selection
   changes, this diagnostic must be updated to match."
   [proposal]
-  (str/lower-case (pr-str (select-keys proposal [:op :summary :rationale :cites :value]))))
+  (str/lower (pr-str (select-keys proposal [:op :summary :rationale :cites :value]))))
 
 (defn op-reachability
   "MEASURES, for every op on the governor's allowlist, whether that op
