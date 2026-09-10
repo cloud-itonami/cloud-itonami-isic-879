@@ -37,11 +37,11 @@ clojure -M:run
 
 ## Test suite
 
-- `test/rescare/governor_test.clj` — unit tests of governor hard checks and scope exclusion
-- `test/rescare/advisor_test.clj` — advisor proposal shape and consistency
-- `test/rescare/phase_test.clj` — rollout phase logic
-- `test/rescare/governor_contract_test.clj` — full graph integration, audit trail
-- `test/rescare/store_contract_test.clj` — Store protocol and MemStore implementation
+- `test/rescare/governor_test.kotoba` — unit tests of governor hard checks and scope exclusion
+- `test/rescare/advisor_test.kotoba` — advisor proposal shape and consistency
+- `test/rescare/phase_test.kotoba` — rollout phase logic
+- `test/rescare/governor_contract_test.kotoba` — full graph integration, audit trail
+- `test/rescare/store_contract_test.kotoba` — Store protocol and MemStore implementation
 
 ## Modules
 
