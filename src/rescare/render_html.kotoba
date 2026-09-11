@@ -35,7 +35,7 @@
   consecutive runs are byte-identical (verified by diffing two runs into
   separate scratch dirs).
 
-  Usage: `clojure -M:dev:render-html [out-file]`
+  Usage: `kbb -M:dev:render-html [out-file]`
   (default `docs/samples/operator-console.html`)."
   (:require [kotoba.lang.text :as str]
             [jp-go-dds.skin]
@@ -520,7 +520,7 @@
      "  <section class=\"card\">\n"
      "    <h2>この実行の要約</h2>\n"
      "    <p class=\"muted\">このページは手書きではなく <code>rescare.render-html</code> が"
-     " <code>clojure -M:dev:render-html</code> で実行時に生成する。"
+     " <code>kbb -M:dev:render-html</code> で実行時に生成する。"
      " すべての行は <code>rescare.store/demo-data</code> の実データに対して"
      " <code>rescare.operation/run-proposal</code> を実際に走らせた結果であり、"
      " 決定は <code>rescare.governor</code> だけが下している。</p>\n"
