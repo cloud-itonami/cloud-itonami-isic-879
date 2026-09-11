@@ -19,7 +19,7 @@
          io.github.kotoba-lang/langchain
          {:local/root "../../kotoba-lang/langchain"}}}
   :run {:main-opts ["-m" "rescare.sim"]}
-  ;; clojure -M:dev:render-html [out-file] -> 実 actor を走らせて
+  ;; kbb -M:dev:render-html [out-file] -> 実 actor を走らせて
   ;; docs/samples/operator-console.html を再生成する(flagship item 2)。
   ;; HARD hold が 0 件なら -main が例外を投げてビルドを止める。
   :render-html {:main-opts ["-m" "rescare.render-html"]}

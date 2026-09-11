@@ -150,7 +150,7 @@
       (doseq [evt ledger]
         (println (str "  " (:op evt)))))))
 
-;; ----------------------------- entry point for clojure -M:run -----------------------------
+;; ----------------------------- entry point for kbb -M:run -----------------------------
 
 (defn -main [& _args]
   (try
